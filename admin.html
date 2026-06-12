@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TIMSupport Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="bg-slate-100">
+
+<div id="loginContainer" class="min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-96">
+        <h2 class="text-2xl font-bold text-center mb-6">Admin Login</h2>
+        <input type="password" id="adminToken" placeholder="Admin Token" class="w-full border rounded-xl p-3 mb-4">
+        <button id="loginBtn" class="w-full bg-indigo-700 text-white py-3 rounded-xl">Login</button>
+        <p id="loginError" class="text-red-600 text-sm text-center mt-3 hidden"></p>
+    </div>
+</div>
+
+<div id="dashboardContainer" class="hidden">
+    <div class="bg-indigo-700 text-white p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold">TIMSupport Admin</h1>
+        <button id="logoutBtn" class="bg-white text-indigo-700 px-4 py-2 rounded-lg">Logout</button>
+    </div>
+    <div class="max-w-6xl mx-auto p-6">
+        <div class="flex gap-4 mb-8">
+            <button id="showProgramsBtn" class="bg-indigo-600 text-white px-6 py-2 rounded-lg">Programs</button>
+            <button id="showEventsBtn" class="bg-slate-600 text-white px-6 py-2 rounded-lg">Events</button>
+        </div>
+
+        <div id="programsSection">
+            <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Programs</h2><button id="addProgramBtn" class="bg-emerald-600 text-white px-4 py-2 rounded-lg"><i class="fas fa-plus"></i> Add</button></div>
+            <div id="programsList">Loading...</div>
+        </div>
+
+        <div id="eventsSection" class="hidden">
+            <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Events</h2><button id="addEventBtn" class="bg-emerald-600 text-white px-4 py-2 rounded-lg"><i class="fas fa-plus"></i> Add</button></div>
+            <div id="eventsList">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals (same as before) -->
+<div id="programModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-md p-6">
+        <h3 id="programModalTitle" class="text-xl font-bold mb-4">Add Program</h3>
+        <form id="programForm"><input type="hidden" id="programId"><input type="text" id="programTitle" placeholder="Title" required class="w-full border rounded-xl p-2 mb-3"><textarea id="programDesc" placeholder="Description" rows="3" required class="w-full border rounded-xl p-2 mb-3"></textarea><div class="flex gap-2 mb-3"><input type="text" id="programStart" placeholder="Start date" class="w-1/2 border rounded-xl p-2"><input type="text" id="programEnd" placeholder="End date" class="w-1/2 border rounded-xl p-2"></div><div class="flex items-center gap-2 mb-4"><input type="checkbox" id="programPublished" checked> <label>Published</label></div><div class="flex gap-3"><button type="submit" class="bg-indigo-700 text-white px-5 py-2 rounded-lg">Save</button><button type="button" id="closeProgramModal" class="border px-5 py-2 rounded-lg">Cancel</button></div></form>
+    </div>
+</div>
+
+<div id="eventModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-md p-6">
+        <h3 id="eventModalTitle" class="text-xl font-bold mb-4">Add Event</h3>
+        <form id="eventForm"><input type="hidden" id="eventId"><input type="text" id="eventTitle" placeholder="Title" required class="w-full border rounded-xl p-2 mb-3"><input type="text" id="eventDate" placeholder="Date (YYYY-MM-DD)" required class="w-full border rounded-xl p-2 mb-3"><input type="text" id="eventLocation" placeholder="Location" class="w-full border rounded-xl p-2 mb-3"><div class="flex items-center gap-2 mb-4"><input type="checkbox" id="eventPublished" checked> <label>Published</label></div><div class="flex gap-3"><button type="submit" class="bg-indigo-700 text-white px-5 py-2 rounded-lg">Save</button><button type="button" id="closeEventModal" class="border px-5 py-2 rounded-lg">Cancel</button></div></form>
+    </div>
+</div>
+
+<script>
+    const API_BASE = 'https://your-render-backend.onrender.com/api/admin';
+    let token = null;
+
+    function setAuthHeader() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }
+
+    async function checkAuth() { if (!token) { showLogin(); return; } try { const res = await fetch(`${API_BASE}/programs`, { headers: { 'Authorization': `Bearer ${token}` } }); if (res.status === 401) showLogin(); else showDashboard(); } catch(e) { showLogin(); } }
+
+    function showLogin() { document.getElementById('loginContainer').classList.remove('hidden'); document.getElementById('dashboardContainer').classList.add('hidden'); token = null; }
+    function showDashboard() { document.getElementById('loginContainer').classList.add('hidden'); document.getElementById('dashboardContainer').classList.remove('hidden'); loadPrograms(); loadEvents(); }
+
+    document.getElementById('loginBtn').addEventListener('click', () => { token = document.getElementById('adminToken').value; if (token) checkAuth(); else document.getElementById('loginError').innerText = 'Enter token'; });
+    document.getElementById('logoutBtn').addEventListener('click', () => { token = null; showLogin(); });
+
+    async function loadPrograms() { const res = await fetch(`${API_BASE}/programs`, { headers: { 'Authorization': `Bearer ${token}` } }); const programs = await res.json(); const container = document.getElementById('programsList'); if (!programs.length) { container.innerHTML = '<div class="text-center py-4">No programs.</div>'; return; } container.innerHTML = programs.map(p => `<div class="bg-white p-4 rounded-xl shadow flex justify-between items-center mb-2"><div><h3 class="font-bold">${escapeHtml(p.title)}</h3><p class="text-sm">${escapeHtml(p.description)}</p><span class="text-xs ${p.published ? 'text-green-600' : 'text-red-500'}">${p.published ? 'Published' : 'Draft'}</span></div><div><button class="edit-program text-blue-600 mr-2" data-id="${p.id}"><i class="fas fa-edit"></i></button><button class="delete-program text-red-600" data-id="${p.id}"><i class="fas fa-trash"></i></button></div></div>`).join(''); attachProgramActions(); }
+
+    function attachProgramActions() { document.querySelectorAll('.edit-program').forEach(btn => btn.addEventListener('click', () => editProgram(btn.dataset.id))); document.querySelectorAll('.delete-program').forEach(btn => btn.addEventListener('click', () => deleteProgram(btn.dataset.id))); }
+    async function editProgram(id) { const res = await fetch(`${API_BASE}/programs`, { headers: { 'Authorization': `Bearer ${token}` } }); const programs = await res.json(); const prog = programs.find(p => p.id == id); if (prog) { document.getElementById('programId').value = prog.id; document.getElementById('programTitle').value = prog.title; document.getElementById('programDesc').value = prog.description || ''; document.getElementById('programStart').value = prog.startDate || ''; document.getElementById('programEnd').value = prog.endDate || ''; document.getElementById('programPublished').checked = prog.published; document.getElementById('programModalTitle').innerText = 'Edit Program'; document.getElementById('programModal').classList.remove('hidden'); } }
+    async function deleteProgram(id) { if (confirm('Delete?')) { await fetch(`${API_BASE}/programs/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); loadPrograms(); } }
+
+    document.getElementById('programForm').addEventListener('submit', async (e) => { e.preventDefault(); const id = document.getElementById('programId').value; const data = { title: document.getElementById('programTitle').value, description: document.getElementById('programDesc').value, startDate: document.getElementById('programStart').value, endDate: document.getElementById('programEnd').value, published: document.getElementById('programPublished').checked }; if (id) { await fetch(`${API_BASE}/programs/${id}`, { method: 'PUT', headers: setAuthHeader(), body: JSON.stringify(data) }); } else { await fetch(`${API_BASE}/programs`, { method: 'POST', headers: setAuthHeader(), body: JSON.stringify(data) }); } closeProgramModal(); loadPrograms(); });
+
+    // Events similar (omitted for brevity, same pattern)
+    async function loadEvents() { const res = await fetch(`${API_BASE}/events`, { headers: { 'Authorization': `Bearer ${token}` } }); const events = await res.json(); const container = document.getElementById('eventsList'); if (!events.length) { container.innerHTML = '<div class="text-center py-4">No events.</div>'; return; } container.innerHTML = events.map(e => `<div class="bg-white p-4 rounded-xl shadow flex justify-between items-center mb-2"><div><h3 class="font-bold">${escapeHtml(e.title)}</h3><p class="text-sm">${e.date} | ${e.location || 'Online'}</p><span class="text-xs ${e.published ? 'text-green-600' : 'text-red-500'}">${e.published ? 'Published' : 'Draft'}</span></div><div><button class="edit-event text-blue-600 mr-2" data-id="${e.id}"><i class="fas fa-edit"></i></button><button class="delete-event text-red-600" data-id="${e.id}"><i class="fas fa-trash"></i></button></div></div>`).join(''); attachEventActions(); }
+    function attachEventActions() { document.querySelectorAll('.edit-event').forEach(btn => btn.addEventListener('click', () => editEvent(btn.dataset.id))); document.querySelectorAll('.delete-event').forEach(btn => btn.addEventListener('click', () => deleteEvent(btn.dataset.id))); }
+    async function editEvent(id) { const res = await fetch(`${API_BASE}/events`, { headers: { 'Authorization': `Bearer ${token}` } }); const events = await res.json(); const ev = events.find(e => e.id == id); if (ev) { document.getElementById('eventId').value = ev.id; document.getElementById('eventTitle').value = ev.title; document.getElementById('eventDate').value = ev.date; document.getElementById('eventLocation').value = ev.location || ''; document.getElementById('eventPublished').checked = ev.published; document.getElementById('eventModalTitle').innerText = 'Edit Event'; document.getElementById('eventModal').classList.remove('hidden'); } }
+    async function deleteEvent(id) { if (confirm('Delete?')) { await fetch(`${API_BASE}/events/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); loadEvents(); } }
+    document.getElementById('eventForm').addEventListener('submit', async (e) => { e.preventDefault(); const id = document.getElementById('eventId').value; const data = { title: document.getElementById('eventTitle').value, date: document.getElementById('eventDate').value, location: document.getElementById('eventLocation').value, published: document.getElementById('eventPublished').checked }; if (id) { await fetch(`${API_BASE}/events/${id}`, { method: 'PUT', headers: setAuthHeader(), body: JSON.stringify(data) }); } else { await fetch(`${API_BASE}/events`, { method: 'POST', headers: setAuthHeader(), body: JSON.stringify(data) }); } closeEventModal(); loadEvents(); });
+
+    function closeProgramModal() { document.getElementById('programModal').classList.add('hidden'); document.getElementById('programForm').reset(); document.getElementById('programId').value = ''; }
+    function closeEventModal() { document.getElementById('eventModal').classList.add('hidden'); document.getElementById('eventForm').reset(); document.getElementById('eventId').value = ''; }
+    document.getElementById('addProgramBtn').addEventListener('click', () => { document.getElementById('programModalTitle').innerText = 'Add Program'; document.getElementById('programForm').reset(); document.getElementById('programPublished').checked = true; document.getElementById('programModal').classList.remove('hidden'); });
+    document.getElementById('addEventBtn').addEventListener('click', () => { document.getElementById('eventModalTitle').innerText = 'Add Event'; document.getElementById('eventForm').reset(); document.getElementById('eventPublished').checked = true; document.getElementById('eventModal').classList.remove('hidden'); });
+    document.getElementById('closeProgramModal').addEventListener('click', closeProgramModal);
+    document.getElementById('closeEventModal').addEventListener('click', closeEventModal);
+    document.getElementById('showProgramsBtn').addEventListener('click', () => { document.getElementById('programsSection').classList.remove('hidden'); document.getElementById('eventsSection').classList.add('hidden'); });
+    document.getElementById('showEventsBtn').addEventListener('click', () => { document.getElementById('programsSection').classList.add('hidden'); document.getElementById('eventsSection').classList.remove('hidden'); });
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+    checkAuth();
+</script>
+</body>
+</html>
