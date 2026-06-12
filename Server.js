@@ -2,25 +2,22 @@ const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
 
-// ==================== FIREBASE ADMIN INITIALIZATION ====================
-// All values come from Render environment variables (set from your service account JSON)
+// Firebase Admin SDK – uses environment variables set in Render
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
   project_id: process.env.FIREBASE_PROJECT_ID,
   private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined,
+  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
   client_email: process.env.FIREBASE_CLIENT_EMAIL,
   client_id: process.env.FIREBASE_CLIENT_ID,
   auth_uri: process.env.FIREBASE_AUTH_URI,
   token_uri: process.env.FIREBASE_TOKEN_URI,
   auth_provider_x509_cert_url: process.env.FIREBASE_AUTH_PROVIDER_X509_CERT_URL,
   client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL,
-  universe_domain: process.env.FIREBASE_UNIVERSE_DOMAIN || "googleapis.com"
 };
 
-// Validate required fields
 if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
-  console.error("Missing Firebase credentials. Check environment variables.");
+  console.error('❌ Missing Firebase credentials. Set environment variables in Render.');
   process.exit(1);
 }
 
@@ -31,32 +28,29 @@ admin.initializeApp({
 const db = admin.firestore();
 const app = express();
 const PORT = process.env.PORT || 3001;
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme';
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Admin token (set in Render environment)
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme';
-
+// Admin authentication middleware
 function requireAdmin(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (authHeader === `Bearer ${ADMIN_TOKEN}`) {
+  const token = req.headers.authorization;
+  if (token === `Bearer ${ADMIN_TOKEN}`) {
     next();
   } else {
     res.status(401).json({ error: 'Unauthorized' });
   }
 }
 
-// ==================== PUBLIC ENDPOINTS ====================
+// ========== PUBLIC ENDPOINTS ==========
 app.get('/api/programs', async (req, res) => {
   try {
     const snapshot = await db.collection('programs').where('published', '==', true).get();
     const programs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(programs);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch programs' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -66,8 +60,7 @@ app.get('/api/events', async (req, res) => {
     const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(events);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch events' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -75,48 +68,38 @@ app.get('/api/experts', async (req, res) => {
   try {
     const snapshot = await db.collection('experts').get();
     res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  } catch (err) {
-    res.json([]);
-  }
+  } catch (err) { res.json([]); }
 });
 
 app.get('/api/successStories', async (req, res) => {
   try {
     const snapshot = await db.collection('successStories').get();
     res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  } catch (err) {
-    res.json([]);
-  }
+  } catch (err) { res.json([]); }
 });
 
 app.get('/api/membershipPlans', async (req, res) => {
   try {
     const snapshot = await db.collection('membershipPlans').get();
     res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  } catch (err) {
-    res.json([]);
-  }
+  } catch (err) { res.json([]); }
 });
 
 app.get('/api/partners', async (req, res) => {
   try {
     const snapshot = await db.collection('partners').get();
     res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  } catch (err) {
-    res.json([]);
-  }
+  } catch (err) { res.json([]); }
 });
 
 app.get('/api/campaigns', async (req, res) => {
   try {
     const snapshot = await db.collection('campaigns').get();
     res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  } catch (err) {
-    res.json([]);
-  }
+  } catch (err) { res.json([]); }
 });
 
-// ==================== ADMIN ENDPOINTS ====================
+// ========== ADMIN ENDPOINTS ==========
 app.get('/api/admin/programs', requireAdmin, async (req, res) => {
   const snapshot = await db.collection('programs').get();
   res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -159,37 +142,31 @@ app.delete('/api/admin/events/:id', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-// ==================== USER ACTIONS ====================
+// ========== USER ACTIONS ==========
 app.post('/api/programEnrollments', async (req, res) => {
   const { programId, participantName, email, phone } = req.body;
   if (!programId || !participantName || !email) {
-    return res.status(400).json({ error: 'Missing fields' });
+    return res.status(400).json({ error: 'Missing required fields' });
   }
   const enrollment = {
-    programId,
-    participantName,
-    email,
-    phone: phone || '',
+    programId, participantName, email, phone: phone || '',
     enrollmentDate: new Date().toISOString()
   };
   const docRef = await db.collection('enrollments').add(enrollment);
-  res.status(201).json({ id: docRef.id, message: 'Enrolled' });
+  res.status(201).json({ id: docRef.id, message: 'Enrollment successful' });
 });
 
 app.post('/api/eventRegistrations', async (req, res) => {
   const { eventId, attendeeName, email, phone } = req.body;
   if (!eventId || !attendeeName || !email) {
-    return res.status(400).json({ error: 'Missing fields' });
+    return res.status(400).json({ error: 'Missing required fields' });
   }
   const registration = {
-    eventId,
-    attendeeName,
-    email,
-    phone: phone || '',
+    eventId, attendeeName, email, phone: phone || '',
     registrationDate: new Date().toISOString()
   };
   const docRef = await db.collection('registrations').add(registration);
-  res.status(201).json({ id: docRef.id, message: 'Registered' });
+  res.status(201).json({ id: docRef.id, message: 'Registration successful' });
 });
 
 app.post('/api/logs', async (req, res) => {
@@ -198,7 +175,7 @@ app.post('/api/logs', async (req, res) => {
   res.status(201).json({ message: 'Logged' });
 });
 
-// ==================== SEED DEFAULT DATA ====================
+// ========== SEED DEFAULT DATA ==========
 async function seedDefaultData() {
   const collections = ['programs', 'events', 'experts', 'successStories', 'membershipPlans', 'partners', 'campaigns'];
   for (const coll of collections) {
@@ -254,7 +231,7 @@ async function seedDefaultData() {
   }
 }
 
-// ==================== START SERVER ====================
+// Start server
 seedDefaultData()
   .then(() => {
     app.listen(PORT, () => {
@@ -263,8 +240,8 @@ seedDefaultData()
     });
   })
   .catch(err => {
-    console.error("Seeding failed, but starting server anyway:", err);
+    console.error('Seeding error:', err);
     app.listen(PORT, () => {
-      console.log(`⚠️ Server started on port ${PORT} (seeding error ignored)`);
+      console.log(`⚠️ Server started on port ${PORT} (seed failed)`);
     });
   });
